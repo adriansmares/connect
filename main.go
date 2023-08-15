@@ -43,7 +43,7 @@ func main() {
 
 		hijacker, ok := w.(http.Hijacker)
 		if !ok {
-			log.Println("hijacker not available")
+			log.Println(id, "hijacker not available")
 			http.Error(w, "hijacker not available", http.StatusServiceUnavailable)
 			return
 		}
@@ -52,7 +52,7 @@ func main() {
 
 		clientConn, _, err := hijacker.Hijack()
 		if err != nil {
-			log.Println("hijack failed", err)
+			log.Println(id, "hijack failed", err)
 			return
 		}
 		defer clientConn.Close()
