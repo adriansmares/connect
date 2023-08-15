@@ -10,8 +10,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func pipe(dst io.Writer, src io.Reader) func() error {
+func pipe(dst io.WriteCloser, src io.Reader) func() error {
 	return func() error {
+		defer dst.Close()
+		defer io.Copy(io.Discard, src) // nolint:errcheck
 		_, err := io.Copy(dst, src)
 		return err
 	}
@@ -20,12 +22,14 @@ func pipe(dst io.Writer, src io.Reader) func() error {
 func main() {
 	id := uint64(0)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := atomic.AddUint64(&id, 1)
+		log.Println(id, "request for", r.Host)
+
 		if r.Method != http.MethodConnect {
+			log.Println(id, "invalid method", r.Method)
 			http.Error(w, "invalid method", http.StatusMethodNotAllowed)
 			return
 		}
-		id := atomic.AddUint64(&id, 1)
-		log.Println(id, "request for", r.Host)
 
 		serverConn, err := (&net.Dialer{}).DialContext(r.Context(), "tcp", r.Host)
 		if err != nil {
