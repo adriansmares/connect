@@ -61,7 +61,7 @@ const (
 	proxyAuthorization = "Proxy-Authorization"
 )
 
-func handleAuthentication(w http.ResponseWriter, r *http.Request, expectedUsernameHash, expectedPasswordHash [64]byte, requireAuth bool) bool {
+func handleAuthentication(w http.ResponseWriter, r *http.Request, expectedUsernameHash, expectedPasswordHash []byte, requireAuth bool) bool {
 	if !requireAuth {
 		return true
 	}
@@ -70,8 +70,8 @@ func handleAuthentication(w http.ResponseWriter, r *http.Request, expectedUserna
 		return false
 	}
 	usernameHash, passwordHash := sha3.Sum512([]byte(username)), sha3.Sum512([]byte(password))
-	equalUsername := subtle.ConstantTimeCompare(usernameHash[:], expectedUsernameHash[:])
-	equalPassword := subtle.ConstantTimeCompare(passwordHash[:], expectedPasswordHash[:])
+	equalUsername := subtle.ConstantTimeCompare(usernameHash[:], expectedUsernameHash)
+	equalPassword := subtle.ConstantTimeCompare(passwordHash[:], expectedPasswordHash)
 	return (equalUsername & equalPassword) == 1
 }
 
@@ -95,7 +95,7 @@ func main() {
 			return
 		}
 
-		if !handleAuthentication(w, r, usernameHash, passwordHash, requireAuth) {
+		if !handleAuthentication(w, r, usernameHash[:], passwordHash[:], requireAuth) {
 			log.Println(id, "authentication failed")
 			w.Header().Add(proxyAuthenticate, "Basic")
 			http.Error(w, "authentication required", http.StatusProxyAuthRequired)
