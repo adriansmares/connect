@@ -134,7 +134,7 @@ func main() {
 			defer resp.Body.Close()
 			defer io.Copy(io.Discard, resp.Body) // nolint:errcheck
 
-			for header, values := range resp.Header {
+			for header, values := range removeHopHeaders(resp.Header) {
 				for _, value := range values {
 					w.Header().Add(header, value)
 				}
