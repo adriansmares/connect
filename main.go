@@ -142,6 +142,7 @@ func main() {
 			w.WriteHeader(resp.StatusCode)
 			io.Copy(w, resp.Body) // nolint:errcheck
 
+			log.Println(id, "request done")
 			return
 		}
 
