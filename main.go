@@ -30,6 +30,23 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+func removeHopHeaders(h http.Header) http.Header {
+	h = h.Clone()
+	for _, header := range []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"Te",
+		"Trailers",
+		"Transfer-Encoding",
+		"Upgrade",
+	} {
+		h.Del(header)
+	}
+	return h
+}
+
 func pipe(dst io.WriteCloser, src io.Reader) func() error {
 	return func() error {
 		defer dst.Close()
@@ -89,16 +106,42 @@ func main() {
 		id := atomic.AddUint64(&id, 1)
 		log.Println(id, "request for", r.Host)
 
-		if r.Method != http.MethodConnect {
-			log.Println(id, "invalid method", r.Method)
-			http.Error(w, "invalid method", http.StatusMethodNotAllowed)
-			return
-		}
-
 		if !handleAuthentication(w, r, usernameHash[:], passwordHash[:], requireAuth) {
 			log.Println(id, "authentication failed")
 			w.Header().Add(proxyAuthenticate, "Basic")
 			http.Error(w, "authentication required", http.StatusProxyAuthRequired)
+			return
+		}
+
+		if r.Method != http.MethodConnect {
+			defer r.Body.Close()
+			defer io.Copy(io.Discard, r.Body) // nolint:errcheck
+
+			req, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body)
+			if err != nil {
+				log.Println(id, "create request failed", err)
+				http.Error(w, "create request failed", http.StatusBadRequest)
+				return
+			}
+			req.Header = removeHopHeaders(r.Header)
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Println(id, "do request failed", err)
+				http.Error(w, "do request failed", http.StatusServiceUnavailable)
+				return
+			}
+			defer resp.Body.Close()
+			defer io.Copy(io.Discard, resp.Body) // nolint:errcheck
+
+			for header, values := range resp.Header {
+				for _, value := range values {
+					w.Header().Add(header, value)
+				}
+			}
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, resp.Body) // nolint:errcheck
+
 			return
 		}
 
