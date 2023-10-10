@@ -93,6 +93,15 @@ func handleAuthentication(w http.ResponseWriter, r *http.Request, expectedUserna
 }
 
 func main() {
+	dialer := &net.Dialer{}
+
+	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+	httpTransport.DialContext = dialer.DialContext
+	httpTransport.MaxIdleConnsPerHost = -1
+	httpClient := &http.Client{
+		Transport: httpTransport,
+	}
+
 	usernameEnv, hasUsername := os.LookupEnv("PROXY_USERNAME")
 	passwordEnv, hasPassword := os.LookupEnv("PROXY_PASSWORD")
 	usernameHash, passwordHash := sha3.Sum512([]byte(usernameEnv)), sha3.Sum512([]byte(passwordEnv))
@@ -125,7 +134,7 @@ func main() {
 			}
 			req.Header = removeHopHeaders(r.Header)
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpClient.Do(req)
 			if err != nil {
 				log.Println(id, "do request failed", err)
 				http.Error(w, "do request failed", http.StatusServiceUnavailable)
@@ -153,7 +162,7 @@ func main() {
 			return
 		}
 
-		serverConn, err := (&net.Dialer{}).DialContext(r.Context(), "tcp", net.JoinHostPort(host, port))
+		serverConn, err := dialer.DialContext(r.Context(), "tcp", net.JoinHostPort(host, port))
 		if err != nil {
 			log.Println(id, "dial failed", err)
 			http.Error(w, "dial failed", http.StatusServiceUnavailable)
